@@ -11,6 +11,37 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin/arch-debian-fym"
 MARK="arch-debian-fym"
 NAMES=(arch-debian-fym apt apt-get apt-cache service)
 
+# Refuse unless the commands we suggest actually exist. Having pacman is what
+# makes a machine "arch" for our purposes (derivatives don't all say so in
+# /etc/os-release). Uninstalling and DESTDIR staging are always fine.
+if [[ ${1-} != --uninstall && -z ${DESTDIR-} ]]; then
+  missing=()
+  tools=(pacman systemctl); (( EUID != 0 )) && tools+=(sudo)
+  for c in "${tools[@]}"; do command -v "$c" >/dev/null || missing+=("$c"); done
+  if [[ " ${missing[*]} " == *" pacman "* ]]; then
+    echo "<${SHELL##*/}> this is not arch, btw" >&2
+    exit 1
+  elif (( ${#missing[@]} )); then
+    echo "<${SHELL##*/}> can't find ${missing[*]}, btw" >&2
+    exit 1
+  fi
+  # Installing needs root (and so do most of the commands we suggest): make sure
+  # sudo actually lets this user in. On a terminal this may ask for your password
+  # once; without one we only refuse if sudo says "not allowed" (a missing
+  # password alone isn't proof of no rights).
+  if (( EUID != 0 )); then
+    if [[ -t 0 ]]; then
+      sudo -v || no_sudo=1
+    elif ! out=$(sudo -n -v 2>&1) && [[ $out != *"password is required"* ]]; then
+      no_sudo=1
+    fi
+    if [[ -n ${no_sudo-} ]]; then
+      echo "<${SHELL##*/}> you don't have sudo rights, btw" >&2
+      exit 1
+    fi
+  fi
+fi
+
 if [[ -z ${DESTDIR-} && $EUID -ne 0 ]]; then
   echo "Needs root to write to $BINDIR; re-running with sudo..." >&2
   exec sudo env PREFIX="$PREFIX" "$0" "$@"
@@ -38,9 +69,6 @@ for n in "${NAMES[@]}"; do
     echo "Refusing to overwrite existing $t (not arch-debian-fym)." >&2; exit 1
   fi
 done
-if [[ -z ${DESTDIR-} ]] && ! command -v pacman >/dev/null; then
-  echo "pacman not found; this is not Arch. Refusing to install." >&2; exit 1
-fi
 
 # Symlink to the repo's script so edits (and git pulls) take effect immediately.
 # Keep the repo in place; if you move it, re-run this installer.
