@@ -3,19 +3,19 @@
 *fym: **f**ix **y**our **m**istake* (or, if you prefer, *f\*\*\* you mean?*)
 
 Installs itself as `apt`, `apt-get`, `apt-cache` and `service` on Arch Linux.
-When you type one of them out of habit, it tells you "This is Arch, btw." and
+When you type one of them out of habit, it tells you "this is arch, btw." and
 prints the `pacman` or `systemctl` command you meant. **It never runs anything**, and always exits
 with status 1.
 
 ```
 $ apt install firefox vlc
-This is Arch, btw. (you typed: apt install firefox vlc)
-fym? Fix Your Mistake.
+this is arch, btw. (you typed: apt install firefox vlc)
+fym? fix your mistake.
 
-Run this instead:
+run this instead:
     sudo pacman -S firefox vlc
 
-Nothing was run. This is arch-debian-fym, not Debian.
+nothing was run. this is arch-debian-fym, not debian.
 ```
 
 ## Install / uninstall

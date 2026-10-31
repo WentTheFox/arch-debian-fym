@@ -31,8 +31,8 @@ if [[ $tool == service ]]; then
     status) cmd="systemctl status" ;;
     status-all)
       cmd="systemctl list-units --type=service"; svc=
-      note="Add --all to include inactive units." ;;
-    "") [[ -n $svc ]] && { cmd="systemctl status"; note="No action given; here's the status. Others: start, stop, restart, reload."; } ;;
+      note="add --all to include inactive units." ;;
+    "") [[ -n $svc ]] && { cmd="systemctl status"; note="no action given; here's the status. others: start, stop, restart, reload."; } ;;
   esac
   if [[ -n $cmd && -n $svc ]]; then cmd+=" $(printf '%q' "$svc")"
   elif [[ -n $cmd && $act != status-all ]]; then cmd+=" <service>"; fi
@@ -57,7 +57,7 @@ cmd= note= need_pkgs=
 case $tool:$sub in
   *:update)
     cmd="sudo pacman -Syu"
-    note="Arch has no separate 'update': refreshing the database without upgrading (-Sy) is unsupported and can break your system." ;;
+    note="arch has no separate 'update': refreshing the database without upgrading (-Sy) is unsupported and can break your system." ;;
   *:upgrade|*:full-upgrade|*:dist-upgrade)
     cmd="sudo pacman -Syu" ;;
   *:install|*:reinstall)
@@ -68,12 +68,12 @@ case $tool:$sub in
     cmd="sudo pacman -Rns"; need_pkgs=1 ;;
   *:autoremove|*:autopurge)
     cmd='sudo pacman -Rns $(pacman -Qdtq)'
-    note="Removes orphaned dependencies. If pacman -Qdtq prints nothing, there is nothing to remove." ;;
+    note="removes orphaned dependencies. If pacman -Qdtq prints nothing, there is nothing to remove." ;;
   *:search|apt-cache:search)
     cmd="pacman -Ss"; need_pkgs=1 ;;
   *:show|*:info|*:policy|*:depends|*:showpkg)
     cmd="pacman -Si"; need_pkgs=1
-    note="Use 'pacman -Qi' instead for packages that are already installed." ;;
+    note="use 'pacman -Qi' instead for packages that are already installed." ;;
   *:list)
     if has_flag --installed; then cmd="pacman -Q"
     elif has_flag --upgradable; then cmd="pacman -Qu"
@@ -86,37 +86,37 @@ case $tool:$sub in
     cmd="sudo pacman -Sw"; need_pkgs=1 ;;
   *:source|*:build-dep)
     cmd="asp export <package> && makepkg -s"
-    note="Needs 'devtools'/'asp'. For AUR packages, just clone the PKGBUILD." ;;
+    note="needs 'devtools'/'asp'. for AUR packages, just clone the PKGBUILD." ;;
 esac
 
 fi
 
 {
-echo "${R}This is Arch, btw.${Z} ${D}(you typed: ${tool} $*)${Z}"
-echo "${D}fym? Fix Your Mistake.${Z}"
+echo "${R}this is arch, btw.${Z} ${D}(you typed: ${tool}${*:+ $*})${Z}"
+echo "${D}fym? fix your mistake.${Z}"
 echo
 
 if [[ $tool == usage ]]; then
-  echo "Run me as ${G}apt${Z}, ${G}apt-get${Z}, ${G}apt-cache${Z} or ${G}service${Z} (that's what the installer sets up)."
+  echo "run me as ${G}apt${Z}, ${G}apt-get${Z}, ${G}apt-cache${Z} or ${G}service${Z} (that's what the installer sets up)."
 elif [[ -n $cmd ]]; then
   if [[ -n $need_pkgs && ${#rest[@]} -eq 0 ]]; then
-    echo "${B}Run this instead${Z} (with your package names):"
+    echo "${B}run this instead${Z} (with your package names):"
     echo "    ${G}${cmd} <package>...${Z}"
   elif [[ -n $need_pkgs ]]; then
-    echo "${B}Run this instead:${Z}"
+    echo "${B}run this instead:${Z}"
     echo "    ${G}${cmd} $(q "${rest[@]}")${Z}"
   else
-    echo "${B}Run this instead:${Z}"
+    echo "${B}run this instead:${Z}"
     echo "    ${G}${cmd}${Z}"
   fi
   [[ -n $note ]] && { echo; echo "${D}${note}${Z}"; }
 elif [[ -z $sub ]]; then
   if [[ $tool == service ]]; then
-    echo "You didn't even say what you wanted. Services on Arch are ${G}systemd${Z}:"
+    echo "you didn't even say what you wanted. services on arch are ${G}systemd${Z}:"
     echo "    ${G}sudo systemctl restart <service>${Z}"
     echo "    ${G}systemctl status <service>${Z}"
   else
-  echo "You didn't even say what you wanted. Package management on Arch is ${G}pacman${Z}:"
+  echo "you didn't even say what you wanted. package management on arch is ${G}pacman${Z}:"
   echo "    ${G}sudo pacman -Syu${Z}        upgrade everything"
   echo "    ${G}sudo pacman -S <pkg>${Z}    install"
   echo "    ${G}sudo pacman -Rns <pkg>${Z}  remove"
@@ -124,14 +124,14 @@ elif [[ -z $sub ]]; then
   fi
 else
   if [[ $tool == service ]]; then
-    echo "I don't have a translation for '${act}'. Try ${G}man systemctl${Z}."
+    echo "i don't have a translation for '${act}'. try ${G}man systemctl${Z}."
   else
-    echo "I don't have a translation for '${sub}'. Try ${G}man pacman${Z} or the Arch wiki:"
+    echo "i don't have a translation for '${sub}'. try ${G}man pacman${Z} or the arch wiki:"
     echo "    https://wiki.archlinux.org/title/Pacman/Rosetta"
   fi
 fi
 echo
-echo "${D}Nothing was run. This is arch-debian-fym, not Debian.${Z}"
+echo "${D}nothing was run. this is arch-debian-fym, not debian.${Z}"
 } >&2
 
 exit 1
