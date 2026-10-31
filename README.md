@@ -4,21 +4,29 @@
 
 Installs itself as `apt`, `apt-get`, `apt-cache` and `service` on Arch Linux.
 When you type one of them out of habit, it tells you "this is arch, btw." and
-prints the `pacman` or `systemctl` command you meant. **It never runs anything**, and always exits
-with status 1.
+prints the `pacman` or `systemctl` command you meant. **It never runs anything.**
 
 ```
 $ apt install firefox vlc
-fish is typing...
-<fish> this is arch, btw.
-<fish> run this instead:
-<fish>     sudo pacman -S firefox vlc
-<fish> nothing was run. this is arch-debian-fym, not debian.
+<fish> this is arch, btw. run this instead:
+<fish> sudo pacman -S firefox vlc
 ```
 
-Output is formatted as chat lines from your own shell (`$SHELL`'s name). On a
-terminal each message is preceded by an animated "fish is typing..." delay. The
-delay is skipped when stderr isn't a tty or `FYM_NO_DELAY` is set.
+In a terminal, the reply is formatted as chat lines from your own shell (the
+name of `$SHELL`) and typed out character by character with a short delay
+between characters. Set `FYM_NO_DELAY` to skip the delay.
+
+When output isn't an interactive terminal (piped, captured, run from a script
+or cron), only the command is printed, on stdout, with no chat decoration:
+
+```
+$ apt install firefox vlc | cat
+sudo pacman -S firefox vlc
+```
+
+If there's no complete command to suggest (e.g. `apt install` with no package),
+nothing goes to stdout and a one-line error goes to stderr. The exit status is
+always 1.
 
 ## Install / uninstall
 
@@ -27,8 +35,9 @@ delay is skipped when stderr isn't a tty or `FYM_NO_DELAY` is set.
 ./install.sh --uninstall
 ```
 
-The script is installed as `arch-debian-fym`; the other names are symlinks to
-it. `PREFIX` and `DESTDIR` are honoured. The installer refuses to run without
+`/usr/local/bin/arch-debian-fym` is a symlink to `bin/arch-debian-fym` in this
+checkout (so edits and `git pull` take effect immediately), and the other names
+are symlinks to it. If you move the checkout, re-run `./install.sh`. `PREFIX` and `DESTDIR` are honoured. The installer refuses to run without
 `pacman`, and refuses to overwrite any `apt` that isn't this project's.
 
 ## Handled commands
@@ -60,7 +69,7 @@ it. `PREFIX` and `DESTDIR` are honoured. The installer refuses to run without
 
 Anything else gets a scolding and a link to the
 [pacman Rosetta](https://wiki.archlinux.org/title/Pacman/Rosetta). Flags like
-`-y` are dropped; only package names are carried over. `NO_COLOR` is respected.
+`-y` are dropped; only package names are carried over.
 
 ## License
 

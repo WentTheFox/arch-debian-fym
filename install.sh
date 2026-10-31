@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installs arch-debian-fym, with apt, apt-get, apt-cache and service symlinks.
 # Usage: ./install.sh [--uninstall]
+# Links to the script in this checkout, so keep the checkout where it is.
 # Env:   PREFIX (default /usr/local), DESTDIR (for packaging)
 set -euo pipefail
 
@@ -16,7 +17,8 @@ if [[ -z ${DESTDIR-} && $EUID -ne 0 ]]; then
 fi
 
 ours() {
-  if [[ -L $1 ]]; then [[ $(readlink "$1") == arch-debian-fym ]]   # our symlinks (may dangle)
+  if [[ -L $1 ]]; then   # our symlinks (may dangle): to the repo script or to the main name
+    case $(readlink "$1") in arch-debian-fym|*/bin/arch-debian-fym) return 0 ;; *) return 1 ;; esac
   else [[ -f $1 ]] && grep -q "$MARK" "$1" 2>/dev/null; fi
 }
 
@@ -40,6 +42,10 @@ if [[ -z ${DESTDIR-} ]] && ! command -v pacman >/dev/null; then
   echo "pacman not found; this is not Arch. Refusing to install." >&2; exit 1
 fi
 
-install -Dm755 "$SRC" "$BINDIR/arch-debian-fym"
+# Symlink to the repo's script so edits (and git pulls) take effect immediately.
+# Keep the repo in place; if you move it, re-run this installer.
+chmod +x "$SRC"
+mkdir -p "$BINDIR"
+ln -sf "$SRC" "$BINDIR/arch-debian-fym"
 for n in apt apt-get apt-cache service; do ln -sf arch-debian-fym "$BINDIR/$n"; done
 echo "Installed: $(printf '%s ' "${NAMES[@]/#/$BINDIR/}")"

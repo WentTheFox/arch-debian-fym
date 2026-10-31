@@ -6,12 +6,6 @@
 tool=${0##*/}
 case $tool in apt|apt-get|apt-cache|service) ;; *) tool=usage ;; esac
 
-if [[ -t 2 && -z ${NO_COLOR-} ]]; then
-  B=$'\e[1m' R=$'\e[1;31m' G=$'\e[1;32m' D=$'\e[2m' Z=$'\e[0m'
-else
-  B= R= G= D= Z=
-fi
-
 if [[ $tool == service ]]; then
   # service <name> <action> | service --status-all
   svc= act= sub=service
@@ -93,71 +87,69 @@ fi
 
 # --- chat-style output -------------------------------------------------------
 # Messages look like IRC lines from your own shell: "<fish> this is arch, btw."
-# On a terminal each message is preceded by a short "fish is typing..." animation.
-# Skipped when stderr isn't a tty or FYM_NO_DELAY is set.
+# On a terminal each message is typed out character by character (skipped when
+# FYM_NO_DELAY is set). When not on an interactive terminal, only the command is
+# printed (to stdout).
 nick=${SHELL##*/}; nick=${nick:-shell}
 
 animate=
 [[ -t 2 && -z ${FYM_NO_DELAY-} ]] && animate=1
 
-if [[ -n $animate ]]; then
-  printf '\e[?25l' >&2                       # hide cursor while "typing"
-  trap 'printf "\e[?25h" >&2' EXIT
-  trap 'exit 130' INT TERM
+# say <text>: type the message out character by character (if on a tty).
+say() {
+  if [[ -z $animate ]]; then raw "$1"; return; fi
+  local text=$1 i
+  sleep 0.1
+  printf '<%s> ' "$nick" >&2
+  for (( i = 0; i < ${#text}; i++ )); do
+    printf '%s' "${text:i:1}" >&2
+    sleep "0.00$(( RANDOM % 5 + 5 ))"          # 5-9ms per character
+  done
+  printf '\n' >&2
+}
+# raw <text>: print a message instantly, no typing (used when not animating).
+raw() { printf '<%s> %s\n' "$nick" "$1" >&2; }
+
+# The command to suggest, when we have a complete one.
+final=
+if [[ -n $cmd ]]; then
+  if [[ -z $need_pkgs ]]; then final=$cmd
+  elif [[ ${#rest[@]} -gt 0 ]]; then final="$cmd $(q "${rest[@]}")"; fi
 fi
 
-# say <text>: typing animation (if on a tty), then the message.
-say() {
-  if [[ -n $animate ]]; then
-    local frames=$(( 2 + ${#1} / 30 )) i
-    (( frames > 5 )) && frames=5
-    for (( i = 0; i < frames * 3; i++ )); do
-      printf '\r\e[K%s%s is typing%s%s' "$D" "$nick" "$(printf '%*s' $(( i % 3 + 1 )) '' | tr ' ' .)" "$Z" >&2
-      sleep 0.15
-    done
-    printf '\r\e[K' >&2
-  fi
-  raw "$1"
-}
-# raw <text>: a message that appears instantly (pasted lines, like commands).
-raw() { printf '%s<%s>%s %s\n' "$D" "$nick" "$Z" "$1" >&2; }
+# Not an interactive terminal (piped, captured, cron...): print only the command.
+if [[ ! ( -t 1 && -t 2 ) ]]; then
+  if [[ -n $final ]]; then printf '%s\n' "$final"
+  else echo "arch-debian-fym: no command to suggest for: ${tool}${*:+ $*}" >&2; fi
+  exit 1
+fi
 
-say "${R}this is arch, btw.${Z}"
-
-if [[ $tool == usage ]]; then
-  say "run me as ${G}apt${Z}, ${G}apt-get${Z}, ${G}apt-cache${Z} or ${G}service${Z} (that's what the installer sets up)."
-elif [[ -n $cmd ]]; then
-  if [[ -n $need_pkgs && ${#rest[@]} -eq 0 ]]; then
-    say "run this instead (with your package names):"
-    raw "    ${G}${cmd} <package>...${Z}"
-  elif [[ -n $need_pkgs ]]; then
-    say "run this instead:"
-    raw "    ${G}${cmd} $(q "${rest[@]}")${Z}"
-  else
-    say "run this instead:"
-    raw "    ${G}${cmd}${Z}"
-  fi
+if [[ -n $final ]]; then
+  say "this is arch, btw. run this instead:"
+  say "$final"
   [[ -n $note ]] && say "$note"
+elif [[ -n $cmd ]]; then
+  say "this is arch, btw. run this instead (with your package names):"
+  say "$cmd <package>..."
+elif [[ $tool == usage ]]; then
+  say "this is arch, btw. run me as apt, apt-get, apt-cache or service (that's what the installer sets up)."
 elif [[ -z $sub ]]; then
   if [[ $tool == service ]]; then
-    say "you didn't even say what you wanted. services on arch are ${G}systemd${Z}:"
-    raw "    ${G}sudo systemctl restart <service>${Z}"
-    raw "    ${G}systemctl status <service>${Z}"
+    say "this is arch, btw. you didn't even say what you wanted. services are systemd:"
+    say "sudo systemctl restart <service>"
+    say "systemctl status <service>"
   else
-    say "you didn't even say what you wanted. package management on arch is ${G}pacman${Z}:"
-    raw "    ${G}sudo pacman -Syu${Z}        upgrade everything"
-    raw "    ${G}sudo pacman -S <pkg>${Z}    install"
-    raw "    ${G}sudo pacman -Rns <pkg>${Z}  remove"
-    raw "    ${G}pacman -Ss <term>${Z}       search"
+    say "this is arch, btw. you didn't even say what you wanted. package management is pacman:"
+    say "sudo pacman -Syu        upgrade everything"
+    say "sudo pacman -S <pkg>    install"
+    say "sudo pacman -Rns <pkg>  remove"
+    say "pacman -Ss <term>       search"
   fi
+elif [[ $tool == service ]]; then
+  say "this is arch, btw. i don't have a translation for '${act}'. try man systemctl."
 else
-  if [[ $tool == service ]]; then
-    say "i don't have a translation for '${act}'. try ${G}man systemctl${Z}."
-  else
-    say "i don't have a translation for '${sub}'. try ${G}man pacman${Z} or the arch wiki:"
-    raw "    https://wiki.archlinux.org/title/Pacman/Rosetta"
-  fi
+  say "this is arch, btw. i don't have a translation for '${sub}'. try man pacman or the arch wiki:"
+  say "https://wiki.archlinux.org/title/Pacman/Rosetta"
 fi
-say "nothing was run. this is arch-debian-fym, not debian."
 
 exit 1
