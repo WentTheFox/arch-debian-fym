@@ -5,6 +5,17 @@
 # terminal it then asks whether to run the suggested command; it never runs
 # anything without a "y". Dispatches on the name it was invoked as.
 
+# Everything lives in main() and is invoked on the last line: bash then has the
+# whole script in memory before running anything, so editing this file (or a
+# git pull) while a prompt is waiting can't corrupt the running copy.
+main() {
+
+# ital <text>: a status line in italics (when the terminal supports formatting).
+ital() {
+  if [[ ${TERM:-dumb} != dumb ]]; then printf '\e[3m%s\e[0m\n' "$1" >&2
+  else printf '%s\n' "$1" >&2; fi
+}
+
 # First step: if we were started through sudo, drop back to the invoking user.
 # We never need root ourselves; the commands we suggest carry their own sudo.
 if (( EUID == 0 )) && [[ -n ${SUDO_USER-} && $SUDO_USER != root ]]; then
@@ -14,11 +25,18 @@ if (( EUID == 0 )) && [[ -n ${SUDO_USER-} && $SUDO_USER != root ]]; then
   IFS=: read -r _ _ _ _ _ home shell < <(getent passwd "$SUDO_USER")
   if [[ -t 2 ]]; then   # only chatter at a terminal
     n=${shell##*/}; n=${n:-shell}
-    it= rs=; [[ ${TERM:-dumb} != dumb ]] && { it=$'\e[3m'; rs=$'\e[0m'; }   # italics if supported
-    printf "<%s> can't believe you'd run some random script as root smh\n" "$n" >&2
-    printf '%s%s dropped root privileges%s\n' "$it" "$n" "$rs" >&2
+    ital "root entered the chat"
+    sighs=("can't believe you'd run some random script as root smh"
+           "really? a random script, as root? bold"
+           "you didn't need me for this, you know"
+           "wow. just wow. a random script. as root."
+           "bold of you to hand a random script the keys to everything"
+           "i've seen things, but this is a new low"
+           "you could've just run it as yourself, you know")
+    printf '<root> %s\n' "${sighs[${SRANDOM:-$RANDOM} % ${#sighs[@]}]}" >&2
+    ital "$n kicked root"
   fi
-  exec runuser -u "$SUDO_USER" -- env FYM_TOOL="${FYM_TOOL:-${0##*/}}" \
+  exec runuser -u "$SUDO_USER" -- env FYM_TOOL="${FYM_TOOL:-${0##*/}}" FYM_WAS_ROOT=1 \
     HOME="$home" USER="$SUDO_USER" LOGNAME="$SUDO_USER" SHELL="${shell:-/bin/sh}" \
     "$(readlink -f "$0")" "$@"
 fi
@@ -295,6 +313,36 @@ nick=${SHELL##*/}; nick=${nick:-shell}
 # say <text>: print one chat line.
 say() { printf '<%s> %s\n' "$nick" "$1" >&2; }
 
+# sudo is about to run: the shell grudgingly lets it in, root gloats.
+sudo_reenters() {
+  local grudges=("ugh fine" "you asked for it" "its your funeral" "why am I even trying" "your call")
+  local gloats=("guess who's back, back again" "look who came crawling back")
+  say "${grudges[${SRANDOM:-$RANDOM} % ${#grudges[@]}]}"
+  ital "$nick invited root to this chat"
+  printf '<root> %s\n' "${gloats[${SRANDOM:-$RANDOM} % ${#gloats[@]}]}" >&2
+}
+
+# Run the suggested command, then say so (in italics) and pass its status on.
+# For a sudo command: if we were started as root, root gloats about coming back
+# and then root takes over again; otherwise root takes over. Whoever takes over gets
+# the credit for running it (with the "sudo " stripped from the command).
+run_it() {
+  local who=$nick shown=$final rc
+  if [[ $final == "sudo "* ]]; then
+    if [[ -n ${FYM_WAS_ROOT-} ]]; then
+      sudo_reenters
+      printf "<root> i'll take it from here\n" >&2
+      who=root shown=${final#sudo }
+    else
+      printf "<root> i'll take it from here\n" >&2
+      who=root shown=${final#sudo }
+    fi
+  fi
+  bash -c "$final"; rc=$?
+  ital "$who ran $shown"
+  exit $rc
+}
+
 # The command to suggest, when we have a complete one.
 final=$override
 if [[ -z $final && -n $cmd ]]; then
@@ -320,7 +368,7 @@ if [[ -n $final ]]; then
     guesses=("don't you mean %s" "i think you meant %s" "that should have been %s imo"
              "you sure you didn't mean %s")
     # shellcheck disable=SC2059
-    say "$(printf "${guesses[RANDOM % ${#guesses[@]}]}" "$fixed")"
+    say "$(printf "${guesses[${SRANDOM:-$RANDOM} % ${#guesses[@]}]}" "$fixed")"
   fi
   me=${USER:-$(id -un)}
   if [[ -n ${FYM_NO_PROMPT-} ]]; then
@@ -329,8 +377,8 @@ if [[ -n $final ]]; then
                 "couldn't care less" "ok whatever" "leeeroy jenkins" "fire in the hole"
                 "i like to live dangerously" "yeah yeah sure" "yeah sure" "ok" "idgaf"
                 "of course" "what could possibly go wrong")
-    printf '<%s> %s\n' "$me" "${yolo_words[RANDOM % ${#yolo_words[@]}]}" >&2
-    bash -c "$final"; exit $?
+    printf '<%s> %s\n' "$me" "${yolo_words[${SRANDOM:-$RANDOM} % ${#yolo_words[@]}]}" >&2
+    run_it
   # Otherwise offer to run it, only when we're talking to a real person.
   elif [[ -t 0 ]]; then
     say "fym, y/n?"
@@ -343,14 +391,17 @@ if [[ -n $final ]]; then
     # (bash's own `read -n` turns signal generation back on, so read via dd.)
     stty -isig -icanon -echo min 1 2>/dev/null
     ans=$(dd bs=1 count=1 2>/dev/null) || ans=n
+    # Keys like Esc/arrows send several bytes at once: swallow the rest of what
+    # is already buffered (no waiting) so it doesn't leak into your shell.
+    while read -t 0 2>/dev/null; do dd bs=1 count=1 of=/dev/null 2>/dev/null || break; done
     [[ -n $tty_state ]] && stty "$tty_state" 2>/dev/null
     yes_words=(yes yeah yure ye "y not" yus yup)
     no_words=(nvm nope nah "no ty" "no thanks" nevermind)
     if [[ $ans == [yY] ]]; then
-      printf '%s\n' "${yes_words[RANDOM % ${#yes_words[@]}]}" >&2
-      bash -c "$final"; exit $?
+      printf '%s\n' "${yes_words[${SRANDOM:-$RANDOM} % ${#yes_words[@]}]}" >&2
+        run_it
     fi
-    printf '%s\n' "${no_words[RANDOM % ${#no_words[@]}]}" >&2
+    printf '%s\n' "${no_words[${SRANDOM:-$RANDOM} % ${#no_words[@]}]}" >&2
   fi
 elif [[ -n $cmd ]]; then
   say "this is arch, btw. run this instead (with your package names):"
@@ -377,3 +428,6 @@ else
 fi
 
 exit 1
+}
+
+main "$@"; exit $?
