@@ -333,7 +333,7 @@ sudo_reenters() {
   printf '<root> %s\n' "${gloats[${SRANDOM:-$RANDOM} % ${#gloats[@]}]}" >&2
 }
 
-# Run the suggested command, then say so (in italics) and pass its status on.
+# Say what is being run (in italics), run the suggested command and pass its status on.
 # For a sudo command: if we were started as root, root gloats about coming back
 # and then root takes over again; otherwise root takes over. Whoever takes over gets
 # the credit for running it (with the "sudo " stripped from the command).
@@ -349,9 +349,9 @@ run_it() {
       who=root shown=${final#sudo }
     fi
   fi
-  bash -c "$final"; rc=$?
   ital "$who ran $shown"
-  exit $rc
+  bash -c "$final"
+  exit $?
 }
 
 # The command to suggest, when we have a complete one.
