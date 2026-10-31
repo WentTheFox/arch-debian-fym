@@ -15,8 +15,7 @@ $ apt install firefox vlc
 ```
 
 In a terminal, the reply is formatted as chat lines from your own shell (the
-name of `$SHELL`) and typed out character by character with a short delay
-between characters. Set `FYM_NO_DELAY` to skip the delay.
+name of `$SHELL`).
 
 After suggesting a complete command it asks `fym, y/n?`. Pressing `y` echoes a random
 yes (`yes`, `yeah`, `yure`, `ye`, `y not`, `yus`, `yup`) as `<you> ...` (your

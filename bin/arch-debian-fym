@@ -88,28 +88,11 @@ fi
 
 # --- chat-style output -------------------------------------------------------
 # Messages look like IRC lines from your own shell: "<fish> this is arch, btw."
-# On a terminal each message is typed out character by character (skipped when
-# FYM_NO_DELAY is set). When not on an interactive terminal, only the command is
-# printed (to stdout).
+# When not on an interactive terminal, only the command is printed (to stdout).
 nick=${SHELL##*/}; nick=${nick:-shell}
 
-animate=
-[[ -t 2 && -z ${FYM_NO_DELAY-} ]] && animate=1
-
-# say <text>: type the message out character by character (if on a tty).
-say() {
-  if [[ -z $animate ]]; then raw "$1"; return; fi
-  local text=$1 i
-  sleep 0.1
-  printf '<%s> ' "$nick" >&2
-  for (( i = 0; i < ${#text}; i++ )); do
-    printf '%s' "${text:i:1}" >&2
-    sleep "0.00$(( RANDOM % 5 + 5 ))"          # 5-9ms per character
-  done
-  printf '\n' >&2
-}
-# raw <text>: print a message instantly, no typing (used when not animating).
-raw() { printf '<%s> %s\n' "$nick" "$1" >&2; }
+# say <text>: print one chat line.
+say() { printf '<%s> %s\n' "$nick" "$1" >&2; }
 
 # The command to suggest, when we have a complete one.
 final=
