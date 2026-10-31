@@ -112,13 +112,21 @@ if [[ -n $final ]]; then
   say "this is arch, btw. run this instead:"
   say "$final"
   [[ -n $note ]] && say "$note"
-  # Offer to run it, only when we're talking to a real person at a terminal.
-  if [[ -t 0 && -z ${FYM_NO_PROMPT-} ]]; then
+  me=${USER:-$(id -un)}
+  if [[ -n ${FYM_NO_PROMPT-} ]]; then
+    # Prompt disabled: just do it.
+    yolo_words=("fuck it we ball" "jesus take the wheel" "yeah whatever just do it"
+                "couldn't care less" "ok whatever" "leeeroy jenkins" "fire in the hole"
+                "i like to live dangerously" "yeah yeah sure" "yeah sure" "ok" "idgaf"
+                "of course" "what could possibly go wrong")
+    printf '<%s> %s\n' "$me" "${yolo_words[RANDOM % ${#yolo_words[@]}]}" >&2
+    bash -c "$final"; exit $?
+  # Otherwise offer to run it, only when we're talking to a real person.
+  elif [[ -t 0 ]]; then
     say "fym, y/n?"
     # Read one key with signal generation off, so Ctrl+C arrives as a plain key
     # (anything but y counts as "no") and the terminal is always put back.
     ans=
-    me=${USER:-$(id -un)}
     printf '<%s> ' "$me" >&2             # your "chat input" line, shown while waiting
     tty_state=$(stty -g 2>/dev/null)
     [[ -n $tty_state ]] && trap 'stty "$tty_state" 2>/dev/null' EXIT
