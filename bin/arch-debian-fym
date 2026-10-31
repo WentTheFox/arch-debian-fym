@@ -91,47 +91,73 @@ esac
 
 fi
 
-{
-echo "${R}this is arch, btw.${Z} ${D}(you typed: ${tool}${*:+ $*})${Z}"
-echo "${D}fym? fix your mistake.${Z}"
-echo
+# --- chat-style output -------------------------------------------------------
+# Messages look like IRC lines from your own shell: "<fish> this is arch, btw."
+# On a terminal each message is preceded by a short "fish is typing..." animation.
+# Skipped when stderr isn't a tty or FYM_NO_DELAY is set.
+nick=${SHELL##*/}; nick=${nick:-shell}
+
+animate=
+[[ -t 2 && -z ${FYM_NO_DELAY-} ]] && animate=1
+
+if [[ -n $animate ]]; then
+  printf '\e[?25l' >&2                       # hide cursor while "typing"
+  trap 'printf "\e[?25h" >&2' EXIT
+  trap 'exit 130' INT TERM
+fi
+
+# say <text>: typing animation (if on a tty), then the message.
+say() {
+  if [[ -n $animate ]]; then
+    local frames=$(( 2 + ${#1} / 30 )) i
+    (( frames > 5 )) && frames=5
+    for (( i = 0; i < frames * 3; i++ )); do
+      printf '\r\e[K%s%s is typing%s%s' "$D" "$nick" "$(printf '%*s' $(( i % 3 + 1 )) '' | tr ' ' .)" "$Z" >&2
+      sleep 0.15
+    done
+    printf '\r\e[K' >&2
+  fi
+  raw "$1"
+}
+# raw <text>: a message that appears instantly (pasted lines, like commands).
+raw() { printf '%s<%s>%s %s\n' "$D" "$nick" "$Z" "$1" >&2; }
+
+say "${R}this is arch, btw.${Z}"
 
 if [[ $tool == usage ]]; then
-  echo "run me as ${G}apt${Z}, ${G}apt-get${Z}, ${G}apt-cache${Z} or ${G}service${Z} (that's what the installer sets up)."
+  say "run me as ${G}apt${Z}, ${G}apt-get${Z}, ${G}apt-cache${Z} or ${G}service${Z} (that's what the installer sets up)."
 elif [[ -n $cmd ]]; then
   if [[ -n $need_pkgs && ${#rest[@]} -eq 0 ]]; then
-    echo "${B}run this instead${Z} (with your package names):"
-    echo "    ${G}${cmd} <package>...${Z}"
+    say "run this instead (with your package names):"
+    raw "    ${G}${cmd} <package>...${Z}"
   elif [[ -n $need_pkgs ]]; then
-    echo "${B}run this instead:${Z}"
-    echo "    ${G}${cmd} $(q "${rest[@]}")${Z}"
+    say "run this instead:"
+    raw "    ${G}${cmd} $(q "${rest[@]}")${Z}"
   else
-    echo "${B}run this instead:${Z}"
-    echo "    ${G}${cmd}${Z}"
+    say "run this instead:"
+    raw "    ${G}${cmd}${Z}"
   fi
-  [[ -n $note ]] && { echo; echo "${D}${note}${Z}"; }
+  [[ -n $note ]] && say "$note"
 elif [[ -z $sub ]]; then
   if [[ $tool == service ]]; then
-    echo "you didn't even say what you wanted. services on arch are ${G}systemd${Z}:"
-    echo "    ${G}sudo systemctl restart <service>${Z}"
-    echo "    ${G}systemctl status <service>${Z}"
+    say "you didn't even say what you wanted. services on arch are ${G}systemd${Z}:"
+    raw "    ${G}sudo systemctl restart <service>${Z}"
+    raw "    ${G}systemctl status <service>${Z}"
   else
-  echo "you didn't even say what you wanted. package management on arch is ${G}pacman${Z}:"
-  echo "    ${G}sudo pacman -Syu${Z}        upgrade everything"
-  echo "    ${G}sudo pacman -S <pkg>${Z}    install"
-  echo "    ${G}sudo pacman -Rns <pkg>${Z}  remove"
-  echo "    ${G}pacman -Ss <term>${Z}       search"
+    say "you didn't even say what you wanted. package management on arch is ${G}pacman${Z}:"
+    raw "    ${G}sudo pacman -Syu${Z}        upgrade everything"
+    raw "    ${G}sudo pacman -S <pkg>${Z}    install"
+    raw "    ${G}sudo pacman -Rns <pkg>${Z}  remove"
+    raw "    ${G}pacman -Ss <term>${Z}       search"
   fi
 else
   if [[ $tool == service ]]; then
-    echo "i don't have a translation for '${act}'. try ${G}man systemctl${Z}."
+    say "i don't have a translation for '${act}'. try ${G}man systemctl${Z}."
   else
-    echo "i don't have a translation for '${sub}'. try ${G}man pacman${Z} or the arch wiki:"
-    echo "    https://wiki.archlinux.org/title/Pacman/Rosetta"
+    say "i don't have a translation for '${sub}'. try ${G}man pacman${Z} or the arch wiki:"
+    raw "    https://wiki.archlinux.org/title/Pacman/Rosetta"
   fi
 fi
-echo
-echo "${D}nothing was run. this is arch-debian-fym, not debian.${Z}"
-} >&2
+say "nothing was run. this is arch-debian-fym, not debian."
 
 exit 1

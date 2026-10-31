@@ -9,14 +9,16 @@ with status 1.
 
 ```
 $ apt install firefox vlc
-this is arch, btw. (you typed: apt install firefox vlc)
-fym? fix your mistake.
-
-run this instead:
-    sudo pacman -S firefox vlc
-
-nothing was run. this is arch-debian-fym, not debian.
+fish is typing...
+<fish> this is arch, btw.
+<fish> run this instead:
+<fish>     sudo pacman -S firefox vlc
+<fish> nothing was run. this is arch-debian-fym, not debian.
 ```
+
+Output is formatted as chat lines from your own shell (`$SHELL`'s name). On a
+terminal each message is preceded by an animated "fish is typing..." delay. The
+delay is skipped when stderr isn't a tty or `FYM_NO_DELAY` is set.
 
 ## Install / uninstall
 
