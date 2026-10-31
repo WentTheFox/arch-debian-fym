@@ -2,37 +2,16 @@
 
 *fym: **f**ix **y**our **m**istake* (or, if you prefer, *f\*\*\* you mean?*)
 
-Installs itself as `apt`, `apt-get`, `apt-cache` and `service` on Arch Linux.
-When you type one of them out of habit, it tells you "this is arch, btw." and
-prints the `pacman` or `systemctl` command you meant. It only runs the command if you say yes at a prompt.
+An innocent little script that teaches you how to run these commands on Arch.
 
-```
-$ apt install firefox vlc
-<fish> this is arch, btw. run this instead:
-<fish> sudo pacman -S firefox vlc
-<fish> fym, y/n?
-<went> yeah
-```
+It installs itself as `apt`, `apt-get`, `apt-cache` and `service`. When you type
+one of them out of habit, it shows the `pacman` or `systemctl` command you
+meant, and offers to run it for you.
 
-In a terminal, the reply is formatted as chat lines from your own shell (the
-name of `$SHELL`).
-
-After suggesting a complete command it asks `fym, y/n?`. Answering `y` runs it
-(with a chat-style reply from you); anything else, including Ctrl+C, doesn't.
-The prompt only appears when stdin, stdout and stderr are all terminals. Set
-`FYM_NO_PROMPT` to skip the prompt and run the command straight away.
-
+Set `FYM_NO_PROMPT` to skip the question and run the command straight away.
 When output isn't an interactive terminal (piped, captured, run from a script
-or cron), only the command is printed, on stdout, with no chat decoration:
-
-```
-$ apt install firefox vlc | cat
-sudo pacman -S firefox vlc
-```
-
-If there's no complete command to suggest (e.g. `apt install` with no package),
-nothing goes to stdout and a one-line error goes to stderr. Unless you answer
-`y` to the prompt, the exit status is always 1.
+or cron), only the command is printed, on stdout. The exit status is 1 unless
+the command was run.
 
 ## Install / uninstall
 
@@ -43,11 +22,12 @@ nothing goes to stdout and a one-line error goes to stderr. Unless you answer
 
 `/usr/local/bin/arch-debian-fym` is a symlink to `bin/arch-debian-fym` in this
 checkout (so edits and `git pull` take effect immediately), and the other names
-are symlinks to it. If you move the checkout, re-run `./install.sh`. `PREFIX` and `DESTDIR` are honoured. The installer refuses to run if `pacman` can't be found
-(`<fish> this is not arch, btw`; `pacman` is what makes a machine Arch here,
-since derivatives don't all identify as Arch), if `systemctl` is missing
-(`<fish> can't find systemctl, btw`), if you're not root and `sudo` is missing
-or won't let you in (`<fish> you don't have sudo rights, btw`), and refuses to overwrite any `apt` that isn't this project's.
+are symlinks to it. If you move the checkout, re-run `./install.sh`. `PREFIX` and `DESTDIR` are honoured.
+
+The installer refuses to run if `pacman` can't be found (that is what makes a
+machine Arch here, since derivatives don't all identify as Arch), if `systemctl`
+is missing, or if you're not root and `sudo` is missing or won't let you in. It
+also refuses to overwrite any `apt` that isn't this project's.
 
 ## Handled commands
 
