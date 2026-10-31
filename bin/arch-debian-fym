@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # arch-debian-fym: scolds you for typing Debian-isms (apt, service) on Arch and
-# shows the pacman/systemctl equivalent. It never runs anything.
+# shows the pacman/systemctl equivalent. In an interactive terminal it then asks
+# whether to run the suggested command; it never runs anything without a "y".
 # Dispatches on the name it was invoked as (apt, apt-get, apt-cache, service).
 
 tool=${0##*/}
@@ -97,7 +98,10 @@ animate=
 
 # say <text>: type the message out character by character (if on a tty).
 say() {
-  if [[ -z $animate ]]; then raw "$1"; return; fi
+  if [[ -z $animate ]]; then
+    if [[ $2 == nonl ]]; then printf '<%s> %s' "$nick" "$1" >&2; else raw "$1"; fi
+    return
+  fi
   local text=$1 i
   sleep 0.1
   printf '<%s> ' "$nick" >&2
@@ -105,7 +109,7 @@ say() {
     printf '%s' "${text:i:1}" >&2
     sleep "0.00$(( RANDOM % 5 + 5 ))"          # 5-9ms per character
   done
-  printf '\n' >&2
+  [[ $2 == nonl ]] || printf '\n' >&2
 }
 # raw <text>: print a message instantly, no typing (used when not animating).
 raw() { printf '<%s> %s\n' "$nick" "$1" >&2; }
@@ -128,6 +132,13 @@ if [[ -n $final ]]; then
   say "this is arch, btw. run this instead:"
   say "$final"
   [[ -n $note ]] && say "$note"
+  # Offer to run it, only when we're talking to a real person at a terminal.
+  if [[ -t 0 && -z ${FYM_NO_PROMPT-} ]]; then
+    say "run it? [y/N] " nonl
+    read -r -n1 ans
+    echo >&2
+    if [[ $ans == [yY] ]]; then bash -c "$final"; exit $?; fi
+  fi
 elif [[ -n $cmd ]]; then
   say "this is arch, btw. run this instead (with your package names):"
   say "$cmd <package>..."

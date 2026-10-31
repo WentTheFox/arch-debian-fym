@@ -4,17 +4,23 @@
 
 Installs itself as `apt`, `apt-get`, `apt-cache` and `service` on Arch Linux.
 When you type one of them out of habit, it tells you "this is arch, btw." and
-prints the `pacman` or `systemctl` command you meant. **It never runs anything.**
+prints the `pacman` or `systemctl` command you meant. It only runs the command if you say yes at a prompt.
 
 ```
 $ apt install firefox vlc
 <fish> this is arch, btw. run this instead:
 <fish> sudo pacman -S firefox vlc
+<fish> run it? [y/N]
 ```
 
 In a terminal, the reply is formatted as chat lines from your own shell (the
 name of `$SHELL`) and typed out character by character with a short delay
 between characters. Set `FYM_NO_DELAY` to skip the delay.
+
+After suggesting a complete command it asks `run it? [y/N]`. Pressing `y` runs
+the command (and exits with its status); anything else exits with status 1
+without running anything. The prompt only appears when stdin, stdout and stderr
+are all terminals, and `FYM_NO_PROMPT` disables it.
 
 When output isn't an interactive terminal (piped, captured, run from a script
 or cron), only the command is printed, on stdout, with no chat decoration:
@@ -25,8 +31,8 @@ sudo pacman -S firefox vlc
 ```
 
 If there's no complete command to suggest (e.g. `apt install` with no package),
-nothing goes to stdout and a one-line error goes to stderr. The exit status is
-always 1.
+nothing goes to stdout and a one-line error goes to stderr. Unless you answer
+`y` to the prompt, the exit status is always 1.
 
 ## Install / uninstall
 
