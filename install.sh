@@ -10,14 +10,16 @@ PREFIX=${PREFIX:-/usr/local}
 BINDIR="${DESTDIR-}${PREFIX}/bin"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin/arch-debian-fym"
 MARK="arch-debian-fym"
-# Always linked (refuse to overwrite anything foreign):
-CORE=(apt apt-get apt-cache service)
-# Linked unless a real command of that name exists elsewhere in PATH (Arch ships a
-# real dpkg, dpkg-deb... that other tools rely on, so we must not shadow those):
-EXTRAS=(aptitude apt-mark apt-file apt-cdrom add-apt-repository dpkg dpkg-query dpkg-deb
-        dlocate deborphan debsums debi debuild debcheckout lintian
-        atp aptt atp-get apt-egt atp-egt aptget apt-gte egt apt-gt atp-cache apt-cahce
-        apt-chache sevrice sevrcie sercvie servcie srevice sevice servise sercive srvice)
+# The names to link come from the script itself (the single source of truth):
+#   core  - always linked (we refuse to overwrite anything foreign)
+#   extra - linked unless a real command of that name exists elsewhere in PATH
+#           (Arch ships a real dpkg, dpkg-deb... that other tools rely on, so we
+#           must not shadow those). Includes the common misspellings.
+CORE=() EXTRAS=()
+while read -r kind name; do
+  case $kind in core) CORE+=("$name") ;; extra) EXTRAS+=("$name") ;; esac
+done < <(bash "$SRC" --list-names)
+(( ${#CORE[@]} )) || { echo "Couldn't read the name list from $SRC." >&2; exit 1; }
 NAMES=(arch-debian-fym "${CORE[@]}" "${EXTRAS[@]}")
 
 # Refuse unless the commands we suggest actually exist. Having pacman is what

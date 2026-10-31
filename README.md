@@ -100,11 +100,16 @@ showsrc` and `aptitude search '~N'`); those get a "no translation" reply.
 ### Typos and sudo
 
 Common typos of the command names (`atp`, `egt`, `sevrice`, `sevrcie`,
-`sercvie`...) and of subcommands (`isntall`, `updaet`...) are understood too, and
+`sercvie`...; the installer links each of them too) and of subcommands (`isntall`, `updaet`...) are understood too, and
 the corrected spelling is pointed out.
 
 If the script is started through `sudo`, its first step is to drop back to the
 invoking user; the commands it suggests carry their own `sudo`.
+
+The list of command names and typos lives in one place, at the top of
+`bin/arch-debian-fym` (`CORE`, `OTHER`, `TYPOS`); the installer reads it with
+`arch-debian-fym --list-names`, so to add a typo you only edit that file and
+re-run `./install.sh`.
 
 Anything else gets a "no translation" reply and a link to the Rosetta page.
 

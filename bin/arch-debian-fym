@@ -10,6 +10,24 @@
 # git pull) while a prompt is waiting can't corrupt the running copy.
 main() {
 
+# --- names: the single source of truth (install.sh reads them via --list-names)
+CORE=(apt apt-get apt-cache service)   # always linked by the installer
+OTHER=(aptitude apt-mark apt-file apt-cdrom add-apt-repository dpkg dpkg-query dpkg-deb
+       dlocate deborphan debsums debi debuild debcheckout lintian)
+# "real-name misspelling misspelling ...": the installer links every misspelling too
+TYPOS=(
+  "apt atp aptt"
+  "apt-get atp-get apt-egt atp-egt aptget apt-gte egt apt-gt"
+  "apt-cache atp-cache apt-cahce apt-chache apt-cach"
+  "service sevrice sevrcie sercvie servcie srevice sevice servise sercive srvice"
+)
+if [[ ${0##*/} == arch-debian-fym && ${1-} == --list-names ]]; then
+  printf 'core %s\n' "${CORE[@]}"
+  printf 'extra %s\n' "${OTHER[@]}"
+  for line in "${TYPOS[@]}"; do read -ra w <<<"$line"; printf 'extra %s\n' "${w[@]:1}"; done
+  exit 0
+fi
+
 # ital <text>: a status line in italics (when the terminal supports formatting).
 ital() {
   if [[ ${TERM:-dumb} != dumb ]]; then printf '\e[3m%s\e[0m\n' "$1" >&2
@@ -43,19 +61,12 @@ fi
 
 tool=${FYM_TOOL:-${0##*/}}
 orig=$tool
-# Common typos of the command names (the installer links these names too).
-case $tool in
-  atp|aptt|apt-)                                        tool=apt ;;
-  atp-get|apt-egt|atp-egt|aptget|apt-gte|egt|apt-gt)    tool=apt-get ;;
-  atp-cache|apt-cahce|apt-chache|apt-cach)              tool=apt-cache ;;
-  sevrice|sevrcie|sercvie|servcie|srevice|sevice|servise|sercive|srvice) tool=service ;;
-esac
-case $tool in
-  apt|apt-get|apt-cache|aptitude|apt-mark|apt-file|apt-cdrom|add-apt-repository|\
-  dpkg|dpkg-query|dpkg-deb|dlocate|deborphan|debsums|debi|debuild|debcheckout|lintian|\
-  service) ;;
-  *) tool=usage ;;
-esac
+# Map a misspelt command name to the real one, and anything unknown to "usage".
+for line in "${TYPOS[@]}"; do
+  read -ra w <<<"$line"
+  if [[ " ${w[*]:1} " == *" $tool "* ]]; then tool=${w[0]}; break; fi
+done
+[[ " ${CORE[*]} ${OTHER[*]} " == *" $tool "* ]] || tool=usage
 fixed=   # the corrected spelling, if the user mistyped something
 [[ $tool != usage && $orig != "$tool" ]] && fixed=$tool
 
