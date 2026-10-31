@@ -143,7 +143,7 @@ if [[ -n $final ]]; then
     stty -isig -icanon -echo min 1 2>/dev/null
     ans=$(dd bs=1 count=1 2>/dev/null) || ans=n
     [[ -n $tty_state ]] && stty "$tty_state" 2>/dev/null
-    yes_words=(yes yeah yure ye "y not" ye yus yup)
+    yes_words=(yes yeah yure ye "y not" yus yup)
     no_words=(nvm nope nah "no ty" "no thanks" nevermind)
     if [[ $ans == [yY] ]]; then
       printf '%s\n' "${yes_words[RANDOM % ${#yes_words[@]}]}" >&2
