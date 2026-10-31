@@ -1,23 +1,69 @@
 #!/usr/bin/env bash
-# arch-debian-fym: scolds you for typing Debian-isms (apt, service) on Arch and
-# shows the pacman/systemctl equivalent. In an interactive terminal it then asks
-# whether to run the suggested command; it never runs anything without a "y".
-# Dispatches on the name it was invoked as (apt, apt-get, apt-cache, service).
+# arch-debian-fym: scolds you for typing Debian-isms (apt, dpkg, service...) on
+# Arch and shows the pacman/systemctl equivalent, following the Debian/Ubuntu
+# column of https://wiki.archlinux.org/title/Pacman/Rosetta. In an interactive
+# terminal it then asks whether to run the suggested command; it never runs
+# anything without a "y". Dispatches on the name it was invoked as.
 
-tool=${0##*/}
-case $tool in apt|apt-get|apt-cache|service) ;; *) tool=usage ;; esac
+# First step: if we were started through sudo, drop back to the invoking user.
+# We never need root ourselves; the commands we suggest carry their own sudo.
+if (( EUID == 0 )) && [[ -n ${SUDO_USER-} && $SUDO_USER != root ]]; then
+  if ! command -v runuser >/dev/null; then
+    echo "arch-debian-fym: can't drop root (runuser not found)" >&2; exit 1
+  fi
+  IFS=: read -r _ _ _ _ _ home shell < <(getent passwd "$SUDO_USER")
+  if [[ -t 2 ]]; then   # only chatter at a terminal
+    n=${shell##*/}; n=${n:-shell}
+    it= rs=; [[ ${TERM:-dumb} != dumb ]] && { it=$'\e[3m'; rs=$'\e[0m'; }   # italics if supported
+    printf "<%s> can't believe you'd run some random script as root smh\n" "$n" >&2
+    printf '%s%s dropped root privileges%s\n' "$it" "$n" "$rs" >&2
+  fi
+  exec runuser -u "$SUDO_USER" -- env FYM_TOOL="${FYM_TOOL:-${0##*/}}" \
+    HOME="$home" USER="$SUDO_USER" LOGNAME="$SUDO_USER" SHELL="${shell:-/bin/sh}" \
+    "$(readlink -f "$0")" "$@"
+fi
+
+tool=${FYM_TOOL:-${0##*/}}
+orig=$tool
+# Common typos of the command names (the installer links these names too).
+case $tool in
+  atp|aptt|apt-)                                        tool=apt ;;
+  atp-get|apt-egt|atp-egt|aptget|apt-gte|egt|apt-gt)    tool=apt-get ;;
+  atp-cache|apt-cahce|apt-chache|apt-cach)              tool=apt-cache ;;
+  sevrice|sevrcie|sercvie|servcie|srevice|sevice|servise|sercive|srvice) tool=service ;;
+esac
+case $tool in
+  apt|apt-get|apt-cache|aptitude|apt-mark|apt-file|apt-cdrom|add-apt-repository|\
+  dpkg|dpkg-query|dpkg-deb|dlocate|deborphan|debsums|debi|debuild|debcheckout|lintian|\
+  service) ;;
+  *) tool=usage ;;
+esac
+fixed=   # the corrected spelling, if the user mistyped something
+[[ $tool != usage && $orig != "$tool" ]] && fixed=$tool
+
+q() { local s; s=$(printf '%q ' "$@"); printf '%s' "${s% }"; }  # shell-quote operands
+
+cmd= note= args=none override= sub= act= rest=()
+# args: how operands attach to cmd: need (required), opt (optional), none (ignored)
 
 if [[ $tool == service ]]; then
   # service <name> <action> | service --status-all
-  svc= act= sub=service
+  svc=
   for a in "$@"; do
     if [[ $a == --status-all ]]; then act=status-all
     elif [[ $a == -* ]]; then :
     elif [[ -z $svc ]]; then svc=$a
     elif [[ -z $act ]]; then act=$a; fi
   done
-  cmd= note= need_pkgs=
-  rest=()
+  act_in=$act
+  case $act in   # common action typos
+    strat|sart|satrt)         act=start ;;
+    restrat|restat|resatrt|retsart) act=restart ;;
+    staus|stauts|satus|statsu) act=status ;;
+    stpo|sotp)                act=stop ;;
+    relaod|realod)            act=reload ;;
+  esac
+  [[ $act != "$act_in" ]] && fixed="service ${svc:+$svc }$act"
   case $act in
     start|stop|restart|reload|enable|disable)
       cmd="sudo systemctl $act" ;;
@@ -32,58 +78,213 @@ if [[ $tool == service ]]; then
   if [[ -n $cmd && -n $svc ]]; then cmd+=" $(printf '%q' "$svc")"
   elif [[ -n $cmd && $act != status-all ]]; then cmd+=" <service>"; fi
   sub=$act
-else
 
-# Parse: first non-option word is the subcommand, the rest are operands.
-sub= flags=() pkgs=() rest=()
-for a in "$@"; do
-  if [[ -z $sub && $a != -* ]]; then sub=$a
-  elif [[ $a == -* ]]; then flags+=("$a")
-  else pkgs+=("$a"); fi
-done
-rest=("${pkgs[@]}")
+elif [[ $tool != usage ]]; then
+  # --- parse ---------------------------------------------------------------
+  # First non-option word is the subcommand (for dpkg-style tools the first
+  # option is the operation); everything else non-option is an operand.
+  flags=() pkgs=() release=
+  argv=("$@"); i=0
+  while (( i < ${#argv[@]} )); do
+    a=${argv[i]}; (( i++ ))
+    case $a in
+      -t|--target-release) release=${argv[i]-}; (( i++ )); flags+=("$a") ;;
+      --target-release=*)  release=${a#*=}; flags+=("$a") ;;
+      -o|--option|-c|--config-file)
+        if [[ $tool == apt || $tool == apt-get || $tool == apt-cache || $tool == aptitude ]]; then (( i++ )); fi
+        flags+=("$a") ;;
+      -*) flags+=("$a") ;;
+      *)  case $tool in   # tools with a subcommand word; the rest take only operands
+            apt|apt-get|apt-cache|aptitude|apt-mark|apt-file|apt-cdrom)
+              if [[ -z $sub ]]; then sub=$a; else pkgs+=("$a"); fi ;;
+            *) pkgs+=("$a") ;;
+          esac ;;
+    esac
+  done
+  [[ $tool == dpkg* ]] && sub=${flags[0]-}
+  sub_in=$sub
+  case $sub in   # common subcommand typos
+    isntall|instal|intall|insatll|isntal|instll|nstall) sub=install ;;
+    updaet|udpate|upate|updte|uptade)                   sub=update ;;
+    upgrde|ugprade|upgarde|upgrad|ugrade)               sub=upgrade ;;
+    remvoe|romove|remov|reomve|rmeove)                  sub=remove ;;
+    serach|saerch|seach|searhc)                         sub=search ;;
+    autoremvoe|autoremov|autoreomve)                    sub=autoremove ;;
+  esac
+  [[ $sub != "$sub_in" ]] && fixed="$tool $sub"
+  rest=("${pkgs[@]}")
 
-# `apt list --installed` etc. are decided by flags.
-has_flag() { local f; for f in "${flags[@]}"; do [[ $f == "$1" ]] && return 0; done; return 1; }
+  short_has() { local f; for f in "${flags[@]}"; do [[ $f == -[!-]* && $f == *$1* ]] && return 0; done; return 1; }
+  long_has()  { local f; for f in "${flags[@]}"; do [[ $f == "$1" ]] && return 0; done; return 1; }
+  yes= simulate= download= fixbroken= purgeflag= installed= upgradable=
+  case $tool in apt|apt-get|aptitude)
+    { short_has y || long_has --yes || long_has --assume-yes; } && yes=1
+    { short_has s || long_has --simulate || long_has --dry-run || long_has --just-print || long_has --recon || long_has --no-act; } && simulate=1
+    ;;
+  esac
+  { short_has d || long_has --download-only; } && download=1
+  { short_has f || long_has --fix-broken; } && fixbroken=1
+  long_has --purge && purgeflag=1
+  long_has --installed && installed=1
+  long_has --upgradable && upgradable=1
 
-q() { local s; s=$(printf '%q ' "$@"); printf '%s' "${s% }"; }  # shell-quote operands
-cmd= note= need_pkgs=
+  refresh_note="arch has no separate 'update': refreshing the database without upgrading (-Sy) is unsupported and can break your system."
+  files_note="needs the file database: run 'sudo pacman -Fy' first."
 
-case $tool:$sub in
-  *:update)
-    cmd="sudo pacman -Syu"
-    note="arch has no separate 'update': refreshing the database without upgrading (-Sy) is unsupported and can break your system." ;;
-  *:upgrade|*:full-upgrade|*:dist-upgrade)
-    cmd="sudo pacman -Syu" ;;
-  *:install|*:reinstall)
-    cmd="sudo pacman -S"; need_pkgs=1 ;;
-  *:remove)
-    cmd="sudo pacman -R"; need_pkgs=1 ;;
-  *:purge)
-    cmd="sudo pacman -Rns"; need_pkgs=1 ;;
-  *:autoremove|*:autopurge)
-    cmd='sudo pacman -Rns $(pacman -Qdtq)'
-    note="removes orphaned dependencies. If pacman -Qdtq prints nothing, there is nothing to remove." ;;
-  *:search|apt-cache:search)
-    cmd="pacman -Ss"; need_pkgs=1 ;;
-  *:show|*:info|*:policy|*:depends|*:showpkg)
-    cmd="pacman -Si"; need_pkgs=1
-    note="use 'pacman -Qi' instead for packages that are already installed." ;;
-  *:list)
-    if has_flag --installed; then cmd="pacman -Q"
-    elif has_flag --upgradable; then cmd="pacman -Qu"
-    else cmd="pacman -Sl"; fi ;;
-  *:clean|*:autoclean)
-    cmd="sudo pacman -Sc" ;;
-  *:edit-sources)
-    cmd='sudoedit /etc/pacman.conf' ;;
-  *:download)
-    cmd="sudo pacman -Sw"; need_pkgs=1 ;;
-  *:source|*:build-dep)
-    cmd="asp export <package> && makepkg -s"
-    note="needs 'devtools'/'asp'. for AUR packages, just clone the PKGBUILD." ;;
-esac
+  # --- translate -----------------------------------------------------------
+  case $tool in
+    apt|apt-get|apt-cache|aptitude)
+      # aptitude search patterns
+      if [[ $tool == aptitude && $sub == search ]]; then
+        case ${pkgs[0]-} in
+          '~o'*) cmd="pacman -Qm" ;;
+          '~i'*) cmd="pacman -Qs"; args=need ;;
+          '~N'*) : ;;
+          '~D'*) cmd="pacman -Sii"; args=need ;;
+          '~C'*) cmd="pacman -Si"; args=need ;;
+          *)     cmd="pacman -Ss"; args=need ;;
+        esac
+      elif [[ $tool == aptitude && $sub == purge && ${pkgs[0]-} == '~o' ]]; then
+        cmd='pacman -Qmq | sudo pacman -Rs -'
+      else
+        case $sub in
+          update)
+            cmd="sudo pacman -Syu"; note=$refresh_note ;;
+          upgrade|full-upgrade|dist-upgrade|safe-upgrade)
+            cmd="sudo pacman -Syu" ;;
+          install|reinstall)
+            if [[ -n $fixbroken && ${#pkgs[@]} -eq 0 ]]; then
+              cmd="pacman -Dk"
+              note="that checks pacman's dependency level; for broken shared libraries try lddd (devtools) or findbrokenpkgs (AUR)."
+            else
+              if [[ -n $download ]]; then cmd="sudo pacman -Sw"; else cmd="sudo pacman -S"; fi
+              args=need
+              # pkg/release or -t release -> repo/pkg
+              for j in "${!rest[@]}"; do
+                p=${rest[j]}
+                if [[ $p == */* ]]; then rest[j]="${p#*/}/${p%%/*}"
+                elif [[ -n $release ]]; then rest[j]="$release/$p"; fi
+              done
+              if [[ -n $release || "${pkgs[*]}" == */* ]]; then
+                note="to pull from a specific repo use repo_name/package, with the repo name (core, extra...) instead of a release name."
+              fi
+            fi ;;
+          remove)
+            if [[ -n $purgeflag ]]; then cmd="sudo pacman -Rn"; else cmd="sudo pacman -R"; fi
+            args=need ;;
+          purge)
+            cmd="sudo pacman -Rn"; args=need ;;
+          autoremove|autopurge)
+            p=-Rs; { [[ -n $purgeflag || $sub == autopurge ]]; } && p=-Rns
+            if (( ${#pkgs[@]} )); then cmd="sudo pacman $p"; args=need
+            else
+              cmd="pacman -Qdtq | sudo pacman $p -"
+              note="removes orphaned dependencies. use -Qdttq to include optional deps too."
+            fi ;;
+          search)
+            cmd="pacman -Ss"; args=need ;;
+          show|info|showpkg|depends)
+            cmd="pacman -Si"; args=need
+            note="use 'pacman -Qi' instead for packages that are already installed." ;;
+          rdepends|why)
+            cmd="pacman -Sii"; args=need
+            note="use 'pacman -Qii' for installed packages." ;;
+          policy)
+            if (( ${#pkgs[@]} )); then cmd="pacman -Si"; args=need
+            else cmd="cat /etc/pacman.d/mirrorlist"; fi ;;
+          list)
+            if [[ -n $installed ]]; then
+              cmd="pacman -Q"; note="pacman -Qm lists installed packages that are in no repository."
+            elif [[ -n $upgradable ]]; then cmd="pacman -Qu"
+            else cmd="pacman -Sl"; fi ;;
+          dumpavail|dump|pkgnames)
+            cmd="pacman -Sl" ;;
+          stats)
+            cmd="ls /var/lib/pacman/local" ;;
+          dotty)
+            cmd="pactree --graph"; args=need; note="pactree comes from pacman-contrib." ;;
+          changelog)
+            cmd="pacman -Qc"; args=need ;;
+          clean)
+            cmd="sudo pacman -Scc" ;;
+          autoclean)
+            cmd="sudo pacman -Sc" ;;
+          edit-sources)
+            cmd="sudoedit /etc/pacman.conf" ;;
+          download)
+            cmd="sudo pacman -Sw"; args=need ;;
+          check)
+            cmd="pacman -Dk" ;;
+          source)
+            cmd="asp export"; args=need
+            note="asp is the ABS tool; then run 'makepkg -o' in the checked-out directory to fetch the sources." ;;
+          build-dep)
+            cmd="makepkg -seoc"
+            note="run it inside the package's PKGBUILD directory (get it via ABS/asp)." ;;
+          add)
+            if [[ $tool == apt-cache ]]; then
+              (( ${#pkgs[@]} )) && override="sudo cp $(q "${pkgs[@]}") /var/cache/pacman/pkg/"
+            fi ;;
+        esac
+      fi
+      # transaction modifiers from apt's flags
+      if [[ $cmd == "sudo pacman "* && $cmd != *'|'* ]]; then
+        [[ -n $simulate ]] && { cmd=${cmd#sudo }; cmd+=" -p"; }
+        [[ -n $yes ]] && cmd+=" --noconfirm"
+      fi ;;
 
+    apt-mark)
+      case $sub in
+        manual)   cmd="sudo pacman -D --asexplicit"; args=need ;;
+        auto)     cmd="sudo pacman -D --asdeps"; args=need
+                  note="to install something as a dependency in the first place: pacman -S --asdeps." ;;
+        hold)     cmd="sudoedit /etc/pacman.conf"; note="add ${pkgs[*]:-the package} to the IgnorePkg array." ;;
+        unhold)   cmd="sudoedit /etc/pacman.conf"; note="remove ${pkgs[*]:-the package} from the IgnorePkg array." ;;
+        showhold) cmd="grep -E 'IgnorePkg|HoldPkg' /etc/pacman.conf" ;;
+        showmanual) cmd="pacman -Qe" ;;
+        showauto)   cmd="pacman -Qd" ;;
+      esac ;;
+
+    apt-file)
+      case $sub in
+        search) cmd="pacman -F"; args=need; note=$files_note ;;
+        list|show) cmd="pacman -Fl"; args=need; note=$files_note ;;
+        update) cmd="sudo pacman -Fy" ;;
+      esac ;;
+
+    apt-cdrom|add-apt-repository)
+      cmd="sudoedit /etc/pacman.conf"
+      note="installation sources live in /etc/pacman.conf (add a [repo] section, or use the AUR for PPA-style software)." ;;
+
+    dpkg|dpkg-query|dpkg-deb)
+      case $sub in
+        -i|--install)          cmd="sudo pacman -U"; args=need ;;
+        -r|--remove)           cmd="sudo pacman -R"; args=need ;;
+        -P|--purge)            cmd="sudo pacman -Rn"; args=need ;;
+        -l|--list|-W|--show)   cmd="pacman -Q"; args=opt ;;
+        -L|--listfiles)        cmd="pacman -Ql"; args=need ;;
+        -s|--status)           cmd="pacman -Qi"; args=need ;;
+        -S|--search)           cmd="pacman -Qo"; args=need ;;
+        -I|--info)             cmd="pacman -Qp"; args=need ;;
+        -c|--contents)         cmd="pacman -Qpl"; args=need ;;
+        -C|--audit)            cmd="pacman -Dk" ;;
+        -V|--verify)           cmd="pacman -Qk"; args=opt ;;
+        -x|--extract|--fsys-tarfile)
+          if   (( ${#pkgs[@]} >= 2 )); then override="tar -xvf $(q "${pkgs[0]}") -C $(q "${pkgs[1]}")"
+          elif (( ${#pkgs[@]} == 1 )); then override="tar -xvf $(q "${pkgs[0]}")"
+          else cmd="tar -xvf"; args=need; fi ;;
+      esac ;;
+
+    dlocate)   cmd="pacman -Qo"; args=need ;;
+    deborphan) cmd="pacman -Qtt" ;;
+    debsums)   cmd="pacman -Qk"; args=opt; note="add another k (-Qkk) for a deeper check." ;;
+    debi)      cmd="sudo pacman -U"; args=need ;;
+    debuild)   cmd="makepkg -s"; note="run it in the directory containing the PKGBUILD." ;;
+    lintian)   cmd="namcap"; args=need; note="namcap needs to be installed (pacman -S namcap)." ;;
+    debcheckout)
+               cmd="asp export"; args=need
+               note="asp is the ABS tool; then run 'makepkg -o' in the checked-out directory to fetch the sources." ;;
+  esac
 fi
 
 # --- chat-style output -------------------------------------------------------
@@ -95,10 +296,13 @@ nick=${SHELL##*/}; nick=${nick:-shell}
 say() { printf '<%s> %s\n' "$nick" "$1" >&2; }
 
 # The command to suggest, when we have a complete one.
-final=
-if [[ -n $cmd ]]; then
-  if [[ -z $need_pkgs ]]; then final=$cmd
-  elif [[ ${#rest[@]} -gt 0 ]]; then final="$cmd $(q "${rest[@]}")"; fi
+final=$override
+if [[ -z $final && -n $cmd ]]; then
+  case $args in
+    need) (( ${#rest[@]} )) && final="$cmd $(q "${rest[@]}")" ;;
+    opt)  final=$cmd; (( ${#rest[@]} )) && final+=" $(q "${rest[@]}")" ;;
+    *)    final=$cmd ;;
+  esac
 fi
 
 # Not an interactive terminal (piped, captured, cron...): print only the command.
@@ -112,6 +316,12 @@ if [[ -n $final ]]; then
   say "this is arch, btw. run this instead:"
   say "$final"
   [[ -n $note ]] && say "$note"
+  if [[ -n $fixed ]]; then
+    guesses=("don't you mean %s" "i think you meant %s" "that should have been %s imo"
+             "you sure you didn't mean %s")
+    # shellcheck disable=SC2059
+    say "$(printf "${guesses[RANDOM % ${#guesses[@]}]}" "$fixed")"
+  fi
   me=${USER:-$(id -un)}
   if [[ -n ${FYM_NO_PROMPT-} ]]; then
     # Prompt disabled: just do it.
@@ -146,7 +356,7 @@ elif [[ -n $cmd ]]; then
   say "this is arch, btw. run this instead (with your package names):"
   say "$cmd <package>..."
 elif [[ $tool == usage ]]; then
-  say "this is arch, btw. run me as apt, apt-get, apt-cache or service (that's what the installer sets up)."
+  say "this is arch, btw. run me as apt, apt-get, dpkg, service... (that's what the installer sets up)."
 elif [[ -z $sub ]]; then
   if [[ $tool == service ]]; then
     say "this is arch, btw. you didn't even say what you wanted. services are systemd:"

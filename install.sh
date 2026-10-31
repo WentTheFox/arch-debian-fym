@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Installs arch-debian-fym, with apt, apt-get, apt-cache and service symlinks.
+# Installs arch-debian-fym, with symlinks for apt, apt-get, apt-cache, service,
+# the other Debian tools (dpkg, aptitude...) and common typos of those names.
 # Usage: ./install.sh [--uninstall]
 # Links to the script in this checkout, so keep the checkout where it is.
 # Env:   PREFIX (default /usr/local), DESTDIR (for packaging)
@@ -9,7 +10,15 @@ PREFIX=${PREFIX:-/usr/local}
 BINDIR="${DESTDIR-}${PREFIX}/bin"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin/arch-debian-fym"
 MARK="arch-debian-fym"
-NAMES=(arch-debian-fym apt apt-get apt-cache service)
+# Always linked (refuse to overwrite anything foreign):
+CORE=(apt apt-get apt-cache service)
+# Linked unless a real command of that name exists elsewhere in PATH (Arch ships a
+# real dpkg, dpkg-deb... that other tools rely on, so we must not shadow those):
+EXTRAS=(aptitude apt-mark apt-file apt-cdrom add-apt-repository dpkg dpkg-query dpkg-deb
+        dlocate deborphan debsums debi debuild debcheckout lintian
+        atp aptt atp-get apt-egt atp-egt aptget apt-gte egt apt-gt atp-cache apt-cahce
+        apt-chache sevrice sevrcie sercvie servcie srevice sevice servise sercive srvice)
+NAMES=(arch-debian-fym "${CORE[@]}" "${EXTRAS[@]}")
 
 # Refuse unless the commands we suggest actually exist. Having pacman is what
 # makes a machine "arch" for our purposes (derivatives don't all say so in
@@ -63,17 +72,37 @@ if [[ ${1-} == --uninstall ]]; then
 fi
 
 # Never clobber a real apt (e.g. a non-Arch system, or a foreign package).
-for n in "${NAMES[@]}"; do
+for n in "${CORE[@]}"; do
   t="$BINDIR/$n"
   if [[ -e $t || -L $t ]] && ! ours "$t"; then
     echo "Refusing to overwrite existing $t (not arch-debian-fym)." >&2; exit 1
   fi
 done
 
+# A real command of this name somewhere in PATH other than our own bin dir?
+real_cmd() {
+  local d IFS=:
+  for d in $PATH; do
+    [[ -z $d || $d == "$PREFIX/bin" ]] && continue
+    [[ -x $d/$1 && ! -d $d/$1 ]] && { printf '%s\n' "$d/$1"; return 0; }
+  done
+  return 1
+}
+
 # Symlink to the repo's script so edits (and git pulls) take effect immediately.
 # Keep the repo in place; if you move it, re-run this installer.
 chmod +x "$SRC"
 mkdir -p "$BINDIR"
 ln -sf "$SRC" "$BINDIR/arch-debian-fym"
-for n in apt apt-get apt-cache service; do ln -sf arch-debian-fym "$BINDIR/$n"; done
-echo "Installed: $(printf '%s ' "${NAMES[@]/#/$BINDIR/}")"
+linked=(arch-debian-fym) skipped=()
+for n in "${CORE[@]}"; do ln -sf arch-debian-fym "$BINDIR/$n"; linked+=("$n"); done
+for n in "${EXTRAS[@]}"; do
+  t="$BINDIR/$n"
+  if real=$(real_cmd "$n"); then skipped+=("$n ($real)")
+  elif [[ -e $t || -L $t ]] && ! ours "$t"; then skipped+=("$n ($t)")
+  else ln -sf arch-debian-fym "$t"; linked+=("$n"); fi
+done
+echo "Installed in $BINDIR: ${linked[*]}"
+if (( ${#skipped[@]} )); then
+  echo "Skipped (a real command already exists): ${skipped[*]}" >&2
+fi
