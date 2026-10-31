@@ -131,7 +131,7 @@ if [[ -n $final ]]; then
   [[ -n $note ]] && say "$note"
   # Offer to run it, only when we're talking to a real person at a terminal.
   if [[ -t 0 && -z ${FYM_NO_PROMPT-} ]]; then
-    say "run it? [y/N]"
+    say "fym, y/n?"
     # Read one key with signal generation off, so Ctrl+C arrives as a plain key
     # (anything but y counts as "no") and the terminal is always put back.
     ans=

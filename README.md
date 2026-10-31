@@ -10,7 +10,7 @@ prints the `pacman` or `systemctl` command you meant. It only runs the command i
 $ apt install firefox vlc
 <fish> this is arch, btw. run this instead:
 <fish> sudo pacman -S firefox vlc
-<fish> run it? [y/N]
+<fish> fym, y/n?
 <went> yup
 ```
 
@@ -18,7 +18,7 @@ In a terminal, the reply is formatted as chat lines from your own shell (the
 name of `$SHELL`) and typed out character by character with a short delay
 between characters. Set `FYM_NO_DELAY` to skip the delay.
 
-After suggesting a complete command it asks `run it? [y/N]`. Pressing `y` echoes a random
+After suggesting a complete command it asks `fym, y/n?`. Pressing `y` echoes a random
 yes (`yes`, `yeah`, `yure`, `ye`, `y not`, `yus`, `yup`) as `<you> ...` (your
 `$USER`) and runs the command, exiting with its status. Anything else
 (including Ctrl+C) echoes a random no (`nvm`, `nope`, `nah`, `no ty`,
