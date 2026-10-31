@@ -11,15 +11,18 @@ $ apt install firefox vlc
 <fish> this is arch, btw. run this instead:
 <fish> sudo pacman -S firefox vlc
 <fish> run it? [y/N]
+<went> yup
 ```
 
 In a terminal, the reply is formatted as chat lines from your own shell (the
 name of `$SHELL`) and typed out character by character with a short delay
 between characters. Set `FYM_NO_DELAY` to skip the delay.
 
-After suggesting a complete command it asks `run it? [y/N]`. Pressing `y` runs
-the command (and exits with its status); anything else exits with status 1
-without running anything. The prompt only appears when stdin, stdout and stderr
+After suggesting a complete command it asks `run it? [y/N]`. Pressing `y` echoes a random
+yes (`yes`, `yeah`, `yure`, `ye`, `y not`, `yus`, `yup`) as `<you> ...` (your
+`$USER`) and runs the command, exiting with its status. Anything else
+(including Ctrl+C) echoes a random no (`nvm`, `nope`, `nah`, `no ty`,
+`no thanks`, `nevermind`) and exits with status 1 without running anything. The prompt only appears when stdin, stdout and stderr
 are all terminals, and `FYM_NO_PROMPT` disables it.
 
 When output isn't an interactive terminal (piped, captured, run from a script

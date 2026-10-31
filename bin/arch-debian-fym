@@ -98,10 +98,7 @@ animate=
 
 # say <text>: type the message out character by character (if on a tty).
 say() {
-  if [[ -z $animate ]]; then
-    if [[ $2 == nonl ]]; then printf '<%s> %s' "$nick" "$1" >&2; else raw "$1"; fi
-    return
-  fi
+  if [[ -z $animate ]]; then raw "$1"; return; fi
   local text=$1 i
   sleep 0.1
   printf '<%s> ' "$nick" >&2
@@ -109,7 +106,7 @@ say() {
     printf '%s' "${text:i:1}" >&2
     sleep "0.00$(( RANDOM % 5 + 5 ))"          # 5-9ms per character
   done
-  [[ $2 == nonl ]] || printf '\n' >&2
+  printf '\n' >&2
 }
 # raw <text>: print a message instantly, no typing (used when not animating).
 raw() { printf '<%s> %s\n' "$nick" "$1" >&2; }
@@ -134,10 +131,25 @@ if [[ -n $final ]]; then
   [[ -n $note ]] && say "$note"
   # Offer to run it, only when we're talking to a real person at a terminal.
   if [[ -t 0 && -z ${FYM_NO_PROMPT-} ]]; then
-    say "run it? [y/N] " nonl
-    read -r -n1 ans
-    echo >&2
-    if [[ $ans == [yY] ]]; then bash -c "$final"; exit $?; fi
+    say "run it? [y/N]"
+    # Read one key with signal generation off, so Ctrl+C arrives as a plain key
+    # (anything but y counts as "no") and the terminal is always put back.
+    ans=
+    me=${USER:-$(id -un)}
+    printf '<%s> ' "$me" >&2             # your "chat input" line, shown while waiting
+    tty_state=$(stty -g 2>/dev/null)
+    [[ -n $tty_state ]] && trap 'stty "$tty_state" 2>/dev/null' EXIT
+    # (bash's own `read -n` turns signal generation back on, so read via dd.)
+    stty -isig -icanon -echo min 1 2>/dev/null
+    ans=$(dd bs=1 count=1 2>/dev/null) || ans=n
+    [[ -n $tty_state ]] && stty "$tty_state" 2>/dev/null
+    yes_words=(yes yeah yure ye "y not" ye yus yup)
+    no_words=(nvm nope nah "no ty" "no thanks" nevermind)
+    if [[ $ans == [yY] ]]; then
+      printf '%s\n' "${yes_words[RANDOM % ${#yes_words[@]}]}" >&2
+      bash -c "$final"; exit $?
+    fi
+    printf '%s\n' "${no_words[RANDOM % ${#no_words[@]}]}" >&2
   fi
 elif [[ -n $cmd ]]; then
   say "this is arch, btw. run this instead (with your package names):"
